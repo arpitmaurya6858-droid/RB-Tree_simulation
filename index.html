@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Red-Black Tree Visualizer</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    body {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      background-color: #f4f6f8;
+    }
+    header {
+      background-color: #1e293b;
+      color: #fff;
+      padding: 1rem 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .controls {
+      display: flex;
+      gap: 0.5rem;
+    }
+    input[type="number"] {
+      padding: 0.5rem 0.75rem;
+      border: 1px solid #cbd5e1;
+      border-radius: 4px;
+      font-size: 1rem;
+      width: 120px;
+    }
+    button {
+      background-color: #3b82f6;
+      color: white;
+      border: none;
+      padding: 0.5rem 1rem;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.95rem;
+      transition: background-color 0.2s ease;
+    }
+    button:hover {
+      background-color: #2563eb;
+    }
+    button.clear-btn {
+      background-color: #ef4444;
+    }
+    button.clear-btn:hover {
+      background-color: #dc2626;
+    }
+    main {
+      flex: 1;
+      display: flex;
+      position: relative;
+      overflow: hidden;
+    }
+    canvas {
+      flex: 1;
+      background: #ffffff;
+    }
+    #log-panel {
+      width: 320px;
+      background-color: #f8fafc;
+      border-left: 1px solid #e2e8f0;
+      display: flex;
+      flex-direction: column;
+    }
+    #log-panel h3 {
+      padding: 1rem;
+      background: #e2e8f0;
+      font-size: 1rem;
+      color: #334155;
+    }
+    #logs {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1rem;
+      list-style: none;
+      font-size: 0.85rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    #logs li {
+      padding: 0.5rem 0.75rem;
+      border-radius: 4px;
+      background: #ffffff;
+      border-left: 4px solid #3b82f6;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h2>Red-Black Tree Simulation</h2>
+    <div class="controls">
+      <input type="number" id="node-val" placeholder="Value" />
+      <button id="insert-btn">Insert</button>
+      <button id="random-btn">Add Random</button>
+      <button class="clear-btn" id="clear-btn">Clear Tree</button>
+    </div>
+  </header>
+
+  <main>
+    <canvas id="tree-canvas"></canvas>
+    <div id="log-panel">
+      <h3>Operation Logs</h3>
+      <ul id="logs"></ul>
+    </div>
+  </main>
+
+  <script>
+    // --- Data Structures ---
+    const RED = 'RED';
+    const BLACK = 'BLACK';
+
+    class Node {
+      constructor(val, color = RED) {
+        this.val = val;
+        this.color = color;
+        this.left = null;
+        this.right = null;
+        this.parent = null;
+      }
+    }
+
+    class RedBlackTree {
+      constructor(logger) {
+        this.TNULL = new Node(0, BLACK);
+        this.root = this.TNULL;
+        this.log = logger;
+      }
+
+      leftRotate(x) {
+        this.log(`Left rotating at node ${x.val}`);
+        let y = x.right;
+        x.right = y.left;
+        if (y.left !== this.TNULL) {
+          y.left.parent = x;
+        }
+        y.parent = x.parent;
+        if (x.parent === null) {
+          this.root = y;
+        } else if (x === x.parent.left) {
+          x.parent.left = y;
+        } else {
+          x.parent.right = y;
+        }
+        y.left = x;
+        x.parent = y;
+      }
+
+      rightRotate(x) {
+        this.log(`Right rotating at node ${x.val}`);
+        let y = x.left;
+        x.left = y.right;
+        if (y.right !== this.TNULL) {
+          y.right.parent = x;
+        }
+        y.parent = x.parent;
+        if (x.parent === null) {
+          this.root = y;
+        } else if (x === x.parent.right) {
+          x.parent.right = y;
+        } else {
+          x.parent.left = y;
+        }
+        y.right = x;
+        x.parent = y;
+      }
+
+      insertFix(k) {
+        let u;
+        while (k.parent && k.parent.color === RED) {
+          if (k.parent === k.parent.parent.right) {
+            u = k.parent.parent.left; // uncle
+            if (u && u.color === RED) {
+              this.log(`Uncle ${u.val} is RED: Recoloring parent, uncle, and grandparent`);
+              u.color = BLACK;
+              k.parent.color = BLACK;
+              k.parent.parent.color = RED;
+              k = k.parent.parent;
+            } else {
+              if (k === k.parent.left) {
+                this.log(`Triangle case (RL): Right rotating parent ${k.parent.val}`);
+                k = k.parent;
+                this.rightRotate(k);
+              }
+              this.log(`Line case (RR): Left rotating grandparent ${k.parent.parent.val}`);
+              k.parent.color = BLACK;
+              k.parent.parent.color = RED;
+              this.leftRotate(k.parent.parent);
+            }
+          } else {
+            u = k.parent.parent.right; // uncle
+            if (u && u.color === RED) {
+              this.log(`Uncle ${u.val} is RED: Recoloring parent, uncle, and grandparent`);
+              u.color = BLACK;
+              k.parent.color = BLACK;
+              k.parent.parent.color = RED;
+              k = k.parent.parent;
+            } else {
+              if (k === k.parent.right) {
+                this.log(`Triangle case (LR): Left rotating parent ${k.parent.val}`);
+                k = k.parent;
+                this.leftRotate(k);
+              }
+              this.log(`Line case (LL): Right rotating grandparent ${k.parent.parent.val}`);
+              k.parent.color = BLACK;
+              k.parent.parent.color = RED;
+              this.rightRotate(k.parent.parent);
+            }
+          }
+          if (k === this.root) break;
+        }
+        this.root.color = BLACK;
+      }
+
+      insert(key) {
+        let node = new Node(key);
+        node.parent = null;
+        node.left = this.TNULL;
+        node.right = this.TNULL;
+        node.color = RED;
+
+        let y = null;
+        let x = this.root;
+
+        while (x !== this.TNULL) {
+          y = x;
+          if (node.val === x.val) {
+            this.log(`Value ${key} already exists in tree.`);
+            return false;
+          }
+          if (node.val < x.val) {
+            x = x.left;
+          } else {
+            x = x.right;
+          }
+        }
+
+        node.parent = y;
+        if (y === null) {
+          this.root = node;
+        } else if (node.val < y.val) {
+          y.left = node;
+        } else {
+          y.right = node;
+        }
+
+        this.log(`Inserted ${key} as RED node`);
+
+        if (node.parent === null) {
+          node.color = BLACK;
+          return true;
+        }
+
+        if (node.parent.parent === null) {
+          return true;
+        }
+
+        this.insertFix(node);
+        return true;
+      }
+
+      clear() {
+        this.root = this.TNULL;
+      }
+    }
+
+    // --- Visualization & Canvas Handling ---
+    const canvas = document.getElementById('tree-canvas');
+    const ctx = canvas.getContext('2d');
+    const logsList = document.getElementById('logs');
+    const NODE_RADIUS = 20;
+
+    function logMessage(msg) {
+      const li = document.createElement('li');
+      li.textContent = msg;
+      logsList.prepend(li);
+    }
+
+    const tree = new RedBlackTree(logMessage);
+
+    function resizeCanvas() {
+      canvas.width = canvas.parentElement.clientWidth - 320;
+      canvas.height = canvas.parentElement.clientHeight;
+      draw();
+    }
+    window.addEventListener('resize', resizeCanvas);
+
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      if (tree.root !== tree.TNULL) {
+        // Start drawing from root placed centered at the top
+        drawNode(tree.root, canvas.width / 2, 50, canvas.width / 4);
+      }
+    }
+
+    function drawNode(node, x, y, horizontalSpacing) {
+      if (node === tree.TNULL) return;
+
+      const nextY = y + 70;
+
+      // Draw Edges first so they sit behind nodes
+      if (node.left !== tree.TNULL) {
+        const nextX = x - horizontalSpacing;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(nextX, nextY);
+        ctx.strokeStyle = '#94a3b8';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        drawNode(node.left, nextX, nextY, horizontalSpacing / 2);
+      }
+
+      if (node.right !== tree.TNULL) {
+        const nextX = x + horizontalSpacing;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(nextX, nextY);
+        ctx.strokeStyle = '#94a3b8';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        drawNode(node.right, nextX, nextY, horizontalSpacing / 2);
+      }
+
+      // Draw Node Circle
+      ctx.beginPath();
+      ctx.arc(x, y, NODE_RADIUS, 0, 2 * Math.PI);
+      ctx.fillStyle = node.color === RED ? '#ef4444' : '#1e293b';
+      ctx.fill();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // Draw Node Text
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 14px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(node.val, x, y);
+    }
+
+    // --- Event Listeners ---
+    const inputVal = document.getElementById('node-val');
+    const insertBtn = document.getElementById('insert-btn');
+    const randomBtn = document.getElementById('random-btn');
+    const clearBtn = document.getElementById('clear-btn');
+
+    function handleInsert() {
+      const val = parseInt(inputVal.value);
+      if (!isNaN(val)) {
+        tree.insert(val);
+        inputVal.value = '';
+        draw();
+      }
+    }
+
+    insertBtn.addEventListener('click', handleInsert);
+    inputVal.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') handleInsert();
+    });
+
+    randomBtn.addEventListener('click', () => {
+      const rand = Math.floor(Math.random() * 99) + 1;
+      tree.insert(rand);
+      draw();
+    });
+
+    clearBtn.addEventListener('click', () => {
+      tree.clear();
+      logsList.innerHTML = '';
+      logMessage("Tree cleared.");
+      draw();
+    });
+
+    // Initial setup
+    resizeCanvas();
+    logMessage("Visualizer ready. Insert numbers to begin.");
+  </script>
+</body>
+</html>
